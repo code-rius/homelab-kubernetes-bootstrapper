@@ -1,0 +1,27 @@
+all:
+  vars:
+    ansible_user: coderius
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+
+master:
+  hosts:
+    k8s-master-01:
+      ansible_host: 192.168.1.201
+
+workers:
+  hosts:
+    k8s-worker-01:
+      ansible_host: 192.168.1.202
+    k8s-worker-02:
+      ansible_host: 192.168.1.203
+    k8s-worker-03:
+      ansible_host: 192.168.1.204
+
+k8s_cluster:
+  children:
+    master:
+    workers:
+  vars:
+    # Common variables for all cluster nodes
+    kubernetes_version: "1.28"
+    container_runtime: containerd
