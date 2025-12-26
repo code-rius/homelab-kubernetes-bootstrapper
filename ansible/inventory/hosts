@@ -5,19 +5,19 @@ all:
 
 master:
   hosts:
-    k8s-master:
+    k8s-master-1:
       ansible_host: 192.168.1.201
       pod_subnet: 10.200.0.0/24
 
 workers:
   hosts:
-    k8s-worker-01:
+    k8s-worker-1:
       ansible_host: 192.168.1.202
       pod_subnet: 10.200.1.0/24
-    k8s-worker-02:
+    k8s-worker-2:
       ansible_host: 192.168.1.203
       pod_subnet: 10.200.2.0/24
-    k8s-worker-03:
+    k8s-worker-3:
       ansible_host: 192.168.1.204
       pod_subnet: 10.200.3.0/24
 

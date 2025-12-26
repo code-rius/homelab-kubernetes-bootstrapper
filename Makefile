@@ -15,9 +15,9 @@ init:
 
 status:
 	@echo "Checking cluster status..."
-	@ssh coderius@192.168.1.201 "sudo kubectl get nodes"
+	@ssh coderius@192.168.1.201 "kubectl get nodes"
 	@echo ""
-	@ssh coderius@192.168.1.201 "sudo kubectl get pods -A"
+	@ssh coderius@192.168.1.201 "kubectl get pods -A"
 
 clean:
 	@echo "This will reset the cluster. Press Ctrl+C to cancel, or Enter to continue..."
