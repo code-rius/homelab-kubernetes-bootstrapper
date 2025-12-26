@@ -29,11 +29,11 @@ spec:
             - name: PROVISIONER_NAME
               value: k8s-sigs.io/nfs-subdir-external-provisioner
             - name: NFS_SERVER
-              value: "192.168.1.1"  # Your Proxmox host IP
+              value: "pve"
             - name: NFS_PATH
               value: "/ZFS01/nfs-storage"
       volumes:
         - name: nfs-client-root
           nfs:
-            server: 192.168.1.1  # Your Proxmox host IP
+            server: pve
             path: /ZFS01/nfs-storage

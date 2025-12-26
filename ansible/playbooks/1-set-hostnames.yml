@@ -20,6 +20,9 @@
           ff02::1 ip6-allnodes
           ff02::2 ip6-allrouters
           
+          # Proxmox host (NFS server)
+          {{ nfs_server_ip }} {{ nfs_server_hostname }}
+          
           # Kubernetes cluster nodes
           {% for host in groups['k8s_cluster'] %}
           {{ hostvars[host].ansible_host }} {{ host }}

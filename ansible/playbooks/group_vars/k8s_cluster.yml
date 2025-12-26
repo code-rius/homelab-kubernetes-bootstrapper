@@ -14,5 +14,10 @@ cluster_cidr: "10.244.0.0/16"
 service_cidr: "10.96.0.0/12"
 cluster_dns: "10.96.0.10"
 
+# NFS Storage configuration
+nfs_server_hostname: "pve"
+nfs_server_ip: "192.168.1.150"
+nfs_server_path: "/ZFS01/nfs-storage"
+
 # Certificate validity
 cert_validity_days: 3653

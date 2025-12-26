@@ -54,32 +54,24 @@
     - name: Apply NFS StorageClass
       command: kubectl apply -f /tmp/nfs-provisioner/nfs-storageclass.yml
 
-    - name: Load br_netfilter module on all nodes (fix flannel)
-      become: true
-      modprobe:
-        name: br_netfilter
-        state: present
-      delegate_to: "{{ item }}"
-      loop: "{{ groups['k8s_cluster'] }}"
-
-    - name: Restart flannel pods to apply fix
-      command: kubectl rollout restart daemonset/kube-flannel-ds -n kube-flannel
-      ignore_errors: yes
-
-    - name: Wait for flannel to be ready
-      command: kubectl wait --for=condition=ready pod -l app=flannel --timeout=60s -n kube-flannel
-      register: flannel_result
-      retries: 3
-      delay: 10
-      until: flannel_result.rc == 0
-      ignore_errors: yes
-
     - name: Wait for NFS provisioner to be ready
       command: kubectl wait --for=condition=available --timeout=120s deployment/nfs-client-provisioner -n nfs-provisioner
       register: wait_result
       retries: 3
       delay: 10
       until: wait_result.rc == 0
+      ignore_errors: yes
+
+    - name: Check NFS provisioner pod status if wait failed
+      command: kubectl describe pod -n nfs-provisioner -l app=nfs-client-provisioner
+      when: wait_result is failed
+      register: pod_describe
+      ignore_errors: yes
+
+    - name: Display pod describe output
+      debug:
+        msg: "{{ pod_describe.stdout_lines }}"
+      when: wait_result is failed and pod_describe is defined
 
     - name: Get storage classes
       command: kubectl get storageclass
