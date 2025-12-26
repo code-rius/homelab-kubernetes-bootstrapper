@@ -2,6 +2,9 @@
 # Kubernetes cluster configuration
 # Applied to all hosts in the k8s_cluster group
 
+# Cluster identity
+cluster_name: "kubernetes-the-hard-way"
+
 # Versions
 kubernetes_version: "1.35"
 container_runtime: containerd

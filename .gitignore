@@ -3,3 +3,7 @@ ansible/certs/
 *.key
 *.crt
 *.csr
+*.kubeconfig
+
+# Kubeadm join command
+ansible/.kubeadm-join-command
