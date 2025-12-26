@@ -1,0 +1,85 @@
+---
+- name: Install master node components
+  hosts: master
+  become: true
+  tasks:
+    - name: Install etcd and kubectl from default repos
+      apt:
+        name:
+          - etcd
+          - kubectl
+        state: present
+        update_cache: yes
+
+    - name: Get latest Kubernetes version
+      shell: curl -L -s https://dl.k8s.io/release/stable-{{ kubernetes_version }}.txt
+      register: k8s_version_full
+      changed_when: false
+
+    - name: Download Kubernetes master binaries
+      get_url:
+        url: "https://dl.k8s.io/release/{{ k8s_version_full.stdout.strip() }}/bin/linux/amd64/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        mode: '0755'
+      loop:
+        - kube-apiserver
+        - kube-controller-manager
+        - kube-scheduler
+
+- name: Install worker node components
+  hosts: workers
+  become: true
+  tasks:
+    - name: Install container runtime and CNI
+      apt:
+        name:
+          - containerd
+          - runc
+          - kubernetes-cni
+        state: present
+        update_cache: yes
+
+    - name: Get latest Kubernetes version
+      shell: curl -L -s https://dl.k8s.io/release/stable-{{ kubernetes_version }}.txt
+      register: k8s_version_worker
+      changed_when: false
+
+    - name: Download Kubernetes worker binaries
+      get_url:
+        url: "https://dl.k8s.io/release/{{ k8s_version_worker.stdout.strip() }}/bin/linux/amd64/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        mode: '0755'
+      loop:
+        - kubelet
+        - kube-proxy
+
+    - name: Create containerd config directory
+      file:
+        path: /etc/containerd
+        state: directory
+        mode: '0755'
+
+    - name: Generate default containerd config
+      shell: containerd config default > /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Enable SystemdCgroup in containerd
+      lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: '^\s*SystemdCgroup\s*='
+        line: '            SystemdCgroup = true'
+        state: present
+      notify: Restart containerd
+
+    - name: Enable and start containerd
+      systemd:
+        name: containerd
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Restart containerd
+      systemd:
+        name: containerd
+        state: restarted

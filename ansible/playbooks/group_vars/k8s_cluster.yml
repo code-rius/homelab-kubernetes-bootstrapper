@@ -1,0 +1,15 @@
+---
+# Kubernetes cluster configuration
+# Applied to all hosts in the k8s_cluster group
+
+# Versions
+kubernetes_version: "1.35"
+container_runtime: containerd
+
+# Network configuration
+cluster_cidr: "10.200.0.0/16"
+service_cidr: "10.32.0.0/24"
+cluster_dns: "10.32.0.10"
+
+# Certificate validity
+cert_validity_days: 3653

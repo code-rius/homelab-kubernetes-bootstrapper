@@ -25,7 +25,3 @@ k8s_cluster:
   children:
     master:
     workers:
-  vars:
-    # Common variables for all cluster nodes
-    kubernetes_version: "1.35"
-    container_runtime: containerd
