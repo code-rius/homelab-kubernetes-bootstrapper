@@ -1,0 +1,281 @@
+---
+- name: Generate TLS certificates and CA
+  hosts: localhost
+  gather_facts: true
+  vars:
+    base_cert_dir: "{{ playbook_dir }}/../certs"
+  tasks:
+    - name: Create and get absolute cert directory path
+      shell: mkdir -p "{{ base_cert_dir }}" && cd "{{ base_cert_dir }}" && pwd
+      register: cert_dir_result
+      changed_when: false
+
+    - name: Set absolute cert directory
+      set_fact:
+        cert_dir: "{{ cert_dir_result.stdout }}"
+
+    - name: Debug cert directory
+      debug:
+        msg: "Certificates will be stored in: {{ cert_dir }}"
+
+    - name: Generate CA private key
+      community.crypto.openssl_privatekey:
+        path: "{{ cert_dir }}/ca.key"
+        size: 4096
+
+    - name: Generate CA CSR
+      community.crypto.openssl_csr:
+        path: "{{ cert_dir }}/ca.csr"
+        privatekey_path: "{{ cert_dir }}/ca.key"
+        basic_constraints:
+          - CA:TRUE
+        basic_constraints_critical: true
+        key_usage:
+          - cRLSign
+          - keyCertSign
+        key_usage_critical: true
+        subject:
+          C: LT
+          ST: Vilnius County
+          L: Vilnius
+          CN: CA
+
+    - name: Generate self-signed CA certificate
+      community.crypto.x509_certificate:
+        path: "{{ cert_dir }}/ca.crt"
+        privatekey_path: "{{ cert_dir }}/ca.key"
+        csr_path: "{{ cert_dir }}/ca.csr"
+        provider: selfsigned
+        selfsigned_not_after: "+3653d"
+        selfsigned_digest: sha512
+
+    - name: Generate private keys for all components
+      community.crypto.openssl_privatekey:
+        path: "{{ cert_dir }}/{{ item }}.key"
+        size: 4096
+      loop:
+        - admin
+        - kube-proxy
+        - kube-scheduler
+        - kube-controller-manager
+        - kube-api-server
+        - service-accounts
+
+    - name: Generate private keys for worker nodes
+      community.crypto.openssl_privatekey:
+        path: "{{ cert_dir }}/{{ item }}.key"
+        size: 4096
+      loop: "{{ groups['workers'] }}"
+
+    - name: Generate CSR for admin
+      community.crypto.openssl_csr:
+        path: "{{ cert_dir }}/admin.csr"
+        privatekey_path: "{{ cert_dir }}/admin.key"
+        basic_constraints:
+          - CA:FALSE
+        key_usage:
+          - digitalSignature
+          - keyEncipherment
+        extended_key_usage:
+          - clientAuth
+        subject:
+          CN: admin
+          O: system:masters
+
+    - name: Generate CSR for service accounts
+      community.crypto.openssl_csr:
+        path: "{{ cert_dir }}/service-accounts.csr"
+        privatekey_path: "{{ cert_dir }}/service-accounts.key"
+        basic_constraints:
+          - CA:FALSE
+        key_usage:
+          - digitalSignature
+          - keyEncipherment
+        extended_key_usage:
+          - clientAuth
+        subject:
+          CN: service-accounts
+
+    - name: Generate CSR for kube-proxy
+      community.crypto.openssl_csr:
+        path: "{{ cert_dir }}/kube-proxy.csr"
+        privatekey_path: "{{ cert_dir }}/kube-proxy.key"
+        basic_constraints:
+          - CA:FALSE
+        key_usage:
+          - digitalSignature
+          - keyEncipherment
+        extended_key_usage:
+          - clientAuth
+          - serverAuth
+        subject_alt_name:
+          - DNS:kube-proxy
+          - IP:127.0.0.1
+        subject:
+          CN: system:kube-proxy
+          O: system:node-proxier
+
+    - name: Generate CSR for kube-controller-manager
+      community.crypto.openssl_csr:
+        path: "{{ cert_dir }}/kube-controller-manager.csr"
+        privatekey_path: "{{ cert_dir }}/kube-controller-manager.key"
+        basic_constraints:
+          - CA:FALSE
+        key_usage:
+          - digitalSignature
+          - keyEncipherment
+        extended_key_usage:
+          - clientAuth
+          - serverAuth
+        subject_alt_name:
+          - DNS:kube-controller-manager
+          - IP:127.0.0.1
+        subject:
+          CN: system:kube-controller-manager
+          O: system:kube-controller-manager
+
+    - name: Generate CSR for kube-scheduler
+      community.crypto.openssl_csr:
+        path: "{{ cert_dir }}/kube-scheduler.csr"
+        privatekey_path: "{{ cert_dir }}/kube-scheduler.key"
+        basic_constraints:
+          - CA:FALSE
+        key_usage:
+          - digitalSignature
+          - keyEncipherment
+        extended_key_usage:
+          - clientAuth
+          - serverAuth
+        subject_alt_name:
+          - DNS:kube-scheduler
+          - IP:127.0.0.1
+        subject:
+          CN: system:kube-scheduler
+          O: system:kube-scheduler
+
+    - name: Generate CSR for kube-api-server
+      community.crypto.openssl_csr:
+        path: "{{ cert_dir }}/kube-api-server.csr"
+        privatekey_path: "{{ cert_dir }}/kube-api-server.key"
+        basic_constraints:
+          - CA:FALSE
+        key_usage:
+          - digitalSignature
+          - keyEncipherment
+        extended_key_usage:
+          - clientAuth
+          - serverAuth
+        subject_alt_name:
+          - IP:127.0.0.1
+          - IP:10.32.0.1
+          - IP:{{ hostvars[groups['master'][0]].ansible_host }}
+          - DNS:kubernetes
+          - DNS:kubernetes.default
+          - DNS:kubernetes.default.svc
+          - DNS:kubernetes.default.svc.cluster
+          - DNS:kubernetes.svc.cluster.local
+          - DNS:{{ groups['master'][0] }}
+        subject:
+          CN: kubernetes
+
+    - name: Generate CSR for worker nodes
+      community.crypto.openssl_csr:
+        path: "{{ cert_dir }}/{{ item }}.csr"
+        privatekey_path: "{{ cert_dir }}/{{ item }}.key"
+        basic_constraints:
+          - CA:FALSE
+        key_usage:
+          - digitalSignature
+          - keyEncipherment
+        extended_key_usage:
+          - clientAuth
+          - serverAuth
+        subject_alt_name:
+          - DNS:{{ item }}
+          - IP:{{ hostvars[item].ansible_host }}
+          - IP:127.0.0.1
+        subject:
+          CN: "system:node:{{ item }}"
+          O: system:nodes
+      loop: "{{ groups['workers'] }}"
+
+    - name: Sign all certificates with CA
+      community.crypto.x509_certificate:
+        path: "{{ cert_dir }}/{{ item }}.crt"
+        csr_path: "{{ cert_dir }}/{{ item }}.csr"
+        provider: ownca
+        ownca_path: "{{ cert_dir }}/ca.crt"
+        ownca_privatekey_path: "{{ cert_dir }}/ca.key"
+        ownca_not_after: "+3653d"
+        ownca_digest: sha256
+      loop:
+        - admin
+        - kube-proxy
+        - kube-scheduler
+        - kube-controller-manager
+        - kube-api-server
+        - service-accounts
+
+    - name: Sign worker node certificates with CA
+      community.crypto.x509_certificate:
+        path: "{{ cert_dir }}/{{ item }}.crt"
+        csr_path: "{{ cert_dir }}/{{ item }}.csr"
+        provider: ownca
+        ownca_path: "{{ cert_dir }}/ca.crt"
+        ownca_privatekey_path: "{{ cert_dir }}/ca.key"
+        ownca_not_after: "+3653d"
+        ownca_digest: sha256
+      loop: "{{ groups['workers'] }}"
+
+- name: Distribute certificates to worker nodes
+  hosts: workers
+  become: true
+  tasks:
+    - name: Get cert directory from localhost
+      set_fact:
+        cert_dir: "{{ hostvars['localhost']['cert_dir'] }}"
+
+    - name: Create /var/lib/kubelet directory
+      file:
+        path: /var/lib/kubelet
+        state: directory
+        mode: '0755'
+
+    - name: Copy CA certificate to workers
+      copy:
+        src: "{{ cert_dir }}/ca.crt"
+        dest: /var/lib/kubelet/ca.crt
+        mode: '0644'
+
+    - name: Copy kubelet certificate to workers
+      copy:
+        src: "{{ cert_dir }}/{{ inventory_hostname }}.crt"
+        dest: /var/lib/kubelet/kubelet.crt
+        mode: '0644'
+
+    - name: Copy kubelet private key to workers
+      copy:
+        src: "{{ cert_dir }}/{{ inventory_hostname }}.key"
+        dest: /var/lib/kubelet/kubelet.key
+        mode: '0600'
+
+- name: Distribute certificates to master
+  hosts: master
+  become: true
+  tasks:
+    - name: Get cert directory from localhost
+      set_fact:
+        cert_dir: "{{ hostvars['localhost']['cert_dir'] }}"
+
+    - name: Copy CA certificate and key to master
+      copy:
+        src: "{{ cert_dir }}/{{ item }}"
+        dest: "/root/{{ item }}"
+        mode: '0600'
+      loop:
+        - ca.key
+        - ca.crt
+        - kube-api-server.key
+        - kube-api-server.crt
+        - service-accounts.key
+        - service-accounts.crt

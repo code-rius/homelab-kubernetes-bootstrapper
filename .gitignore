@@ -1,0 +1,5 @@
+# Certificates and keys
+ansible/certs/
+*.key
+*.crt
+*.csr
