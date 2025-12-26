@@ -16,6 +16,9 @@ init:
 storage:
 	cd ansible && ansible-playbook playbooks/4-setup-nfs-storage.yml
 
+tailscale:
+	cd ansible && ansible-playbook playbooks/5-setup-tailscale.yml
+
 status:
 	@echo "Checking cluster status..."
 	@ssh coderius@192.168.1.201 "kubectl get nodes"

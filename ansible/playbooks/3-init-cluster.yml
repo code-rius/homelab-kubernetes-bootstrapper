@@ -99,3 +99,28 @@
       retries: 60
       delay: 5
       changed_when: false
+
+    - name: Get current CoreDNS ConfigMap
+      command: kubectl get configmap coredns -n kube-system -o yaml
+      register: coredns_config
+      changed_when: false
+
+    - name: Check if CoreDNS forward is configured correctly
+      set_fact:
+        needs_dns_fix: "{{ 'forward . 8.8.8.8 8.8.4.4' not in coredns_config.stdout }}"
+
+    - name: Fix CoreDNS to use external DNS servers
+      shell: |
+        kubectl get configmap coredns -n kube-system -o yaml | \
+        sed 's|forward \. /etc/resolv.conf {|forward . 8.8.8.8 8.8.4.4 {|g' | \
+        kubectl apply -f -
+      when: needs_dns_fix
+      register: dns_update
+
+    - name: Restart CoreDNS to apply DNS fix
+      command: kubectl rollout restart deployment/coredns -n kube-system
+      when: needs_dns_fix
+
+    - name: Wait for CoreDNS to be ready after restart
+      command: kubectl wait --for=condition=available --timeout=120s deployment/coredns -n kube-system
+      when: needs_dns_fix

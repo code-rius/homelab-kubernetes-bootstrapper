@@ -1,0 +1,84 @@
+---
+- name: Install Tailscale Kubernetes Operator
+  hosts: master
+  become: false
+  tasks:
+    - name: Check if Tailscale OAuth credentials exist locally
+      stat:
+        path: "{{ playbook_dir }}/../resources/tailscale-oauth.env"
+      delegate_to: localhost
+      register: oauth_file
+      become: false
+
+    - name: Fail if OAuth credentials not found
+      fail:
+        msg: |
+          Tailscale OAuth credentials not found!
+          
+          1. Go to https://login.tailscale.com/admin/settings/oauth
+          2. Create a new OAuth client with these scopes:
+             - devices:write
+          3. Copy tailscale-oauth.env.example to tailscale-oauth.env
+          4. Fill in your OAuth credentials
+      when: not oauth_file.stat.exists
+
+    - name: Create Tailscale namespace
+      command: kubectl create namespace tailscale
+      register: namespace_result
+      failed_when: false
+      changed_when: namespace_result.rc == 0
+
+    - name: Read OAuth credentials from local file
+      set_fact:
+        oauth_content: "{{ lookup('file', playbook_dir + '/../resources/tailscale-oauth.env') }}"
+      delegate_to: localhost
+      become: false
+
+    - name: Parse OAuth credentials
+      set_fact:
+        oauth_client_id: "{{ oauth_content | regex_search('OAUTH_CLIENT_ID=(.+)', '\\1') | first }}"
+        oauth_client_secret: "{{ oauth_content | regex_search('OAUTH_CLIENT_SECRET=(.+)', '\\1') | first }}"
+
+    - name: Download Tailscale operator manifest
+      get_url:
+        url: https://raw.githubusercontent.com/tailscale/tailscale/main/cmd/k8s-operator/deploy/manifests/operator.yaml
+        dest: /tmp/tailscale-operator.yaml
+        mode: '0644'
+
+    - name: Install Tailscale Operator
+      command: kubectl apply -f /tmp/tailscale-operator.yaml
+      register: operator_install
+      changed_when: "'created' in operator_install.stdout or 'configured' in operator_install.stdout"
+
+    - name: Wait for operator namespace to be ready
+      command: kubectl get namespace tailscale
+      register: ns_check
+      retries: 10
+      delay: 2
+      until: ns_check.rc == 0
+
+    - name: Create Tailscale operator OAuth secret in correct namespace
+      shell: |
+        kubectl create secret generic operator-oauth \
+          --from-literal=client_id="{{ oauth_client_id }}" \
+          --from-literal=client_secret="{{ oauth_client_secret }}" \
+          -n tailscale \
+          --dry-run=client -o yaml | kubectl apply -f -
+      no_log: true
+
+    - name: Wait for Tailscale operator to be ready
+      command: kubectl wait --for=condition=available --timeout=300s deployment/operator -n tailscale
+      register: wait_result
+      retries: 3
+      delay: 10
+      until: wait_result.rc == 0
+      ignore_errors: yes
+
+    - name: Get operator status
+      command: kubectl get pods -n tailscale
+      register: operator_status
+      changed_when: false
+
+    - name: Display operator status
+      debug:
+        msg: "{{ operator_status.stdout_lines }}"
