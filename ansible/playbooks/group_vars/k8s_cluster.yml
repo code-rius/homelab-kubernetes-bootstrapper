@@ -9,10 +9,10 @@ cluster_name: "kubernetes-the-hard-way"
 kubernetes_version: "1.35"
 container_runtime: containerd
 
-# Network configuration
-cluster_cidr: "10.200.0.0/16"
-service_cidr: "10.32.0.0/24"
-cluster_dns: "10.32.0.10"
+# Network configuration (using Flannel defaults)
+cluster_cidr: "10.244.0.0/16"
+service_cidr: "10.96.0.0/12"
+cluster_dns: "10.96.0.10"
 
 # Certificate validity
 cert_validity_days: 3653

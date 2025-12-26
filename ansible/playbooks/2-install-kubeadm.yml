@@ -14,9 +14,49 @@
         state: present
         update_cache: yes
 
+    - name: Load br_netfilter kernel module
+      modprobe:
+        name: br_netfilter
+        state: present
+
+    - name: Ensure br_netfilter loads on boot
+      lineinfile:
+        path: /etc/modules-load.d/k8s.conf
+        line: br_netfilter
+        create: yes
+        mode: '0644'
+
+    - name: Load overlay kernel module
+      modprobe:
+        name: overlay
+        state: present
+
+    - name: Ensure overlay loads on boot
+      lineinfile:
+        path: /etc/modules-load.d/k8s.conf
+        line: overlay
+        create: yes
+        mode: '0644'
+
     - name: Enable IPv4 forwarding
       sysctl:
         name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_set: yes
+        state: present
+        reload: yes
+
+    - name: Enable bridge-nf-call-iptables
+      sysctl:
+        name: net.bridge.bridge-nf-call-iptables
+        value: '1'
+        sysctl_set: yes
+        state: present
+        reload: yes
+
+    - name: Enable bridge-nf-call-ip6tables
+      sysctl:
+        name: net.bridge.bridge-nf-call-ip6tables
         value: '1'
         sysctl_set: yes
         state: present

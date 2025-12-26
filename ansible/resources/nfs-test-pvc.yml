@@ -1,0 +1,34 @@
+---
+# Test PVC to verify NFS storage works
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-nfs-claim
+  namespace: default
+spec:
+  storageClassName: nfs-client
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Test pod to write to the PVC
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-nfs-pod
+  namespace: default
+spec:
+  containers:
+  - name: test
+    image: busybox
+    command: ["/bin/sh"]
+    args: ["-c", "echo 'NFS storage is working!' > /mnt/test.txt && cat /mnt/test.txt && sleep 3600"]
+    volumeMounts:
+    - name: nfs-storage
+      mountPath: /mnt
+  volumes:
+  - name: nfs-storage
+    persistentVolumeClaim:
+      claimName: test-nfs-claim

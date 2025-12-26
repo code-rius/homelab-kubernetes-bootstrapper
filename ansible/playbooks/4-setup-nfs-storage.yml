@@ -1,0 +1,91 @@
+---
+- name: Install NFS client on all nodes
+  hosts: k8s_cluster
+  become: true
+  tasks:
+    - name: Install NFS client packages
+      apt:
+        name:
+          - nfs-common
+        state: present
+        update_cache: yes
+
+    - name: Ensure NFS client services are enabled
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+      loop:
+        - rpc-statd
+        - nfs-client.target
+
+- name: Deploy NFS provisioner to cluster
+  hosts: master
+  become: false
+  tasks:
+    - name: Create nfs-provisioner namespace
+      command: kubectl create namespace nfs-provisioner
+      register: namespace_result
+      failed_when: false
+      changed_when: namespace_result.rc == 0
+
+    - name: Create temp directory for k8s manifests
+      file:
+        path: /tmp/nfs-provisioner
+        state: directory
+        mode: '0755'
+
+    - name: Copy NFS provisioner manifests to master
+      copy:
+        src: "{{ playbook_dir }}/../resources/{{ item }}"
+        dest: "/tmp/nfs-provisioner/{{ item }}"
+        mode: '0644'
+      loop:
+        - nfs-provisioner-rbac.yml
+        - nfs-provisioner-deployment.yml
+        - nfs-storageclass.yml
+
+    - name: Apply NFS provisioner RBAC
+      command: kubectl apply -f /tmp/nfs-provisioner/nfs-provisioner-rbac.yml
+
+    - name: Apply NFS provisioner deployment
+      command: kubectl apply -f /tmp/nfs-provisioner/nfs-provisioner-deployment.yml
+
+    - name: Apply NFS StorageClass
+      command: kubectl apply -f /tmp/nfs-provisioner/nfs-storageclass.yml
+
+    - name: Load br_netfilter module on all nodes (fix flannel)
+      become: true
+      modprobe:
+        name: br_netfilter
+        state: present
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['k8s_cluster'] }}"
+
+    - name: Restart flannel pods to apply fix
+      command: kubectl rollout restart daemonset/kube-flannel-ds -n kube-flannel
+      ignore_errors: yes
+
+    - name: Wait for flannel to be ready
+      command: kubectl wait --for=condition=ready pod -l app=flannel --timeout=60s -n kube-flannel
+      register: flannel_result
+      retries: 3
+      delay: 10
+      until: flannel_result.rc == 0
+      ignore_errors: yes
+
+    - name: Wait for NFS provisioner to be ready
+      command: kubectl wait --for=condition=available --timeout=120s deployment/nfs-client-provisioner -n nfs-provisioner
+      register: wait_result
+      retries: 3
+      delay: 10
+      until: wait_result.rc == 0
+
+    - name: Get storage classes
+      command: kubectl get storageclass
+      register: storageclass_output
+      changed_when: false
+
+    - name: Display storage classes
+      debug:
+        msg: "{{ storageclass_output.stdout_lines }}"

@@ -13,6 +13,9 @@ install:
 init:
 	cd ansible && ansible-playbook playbooks/3-init-cluster.yml
 
+storage:
+	cd ansible && ansible-playbook playbooks/4-setup-nfs-storage.yml
+
 status:
 	@echo "Checking cluster status..."
 	@ssh coderius@192.168.1.201 "kubectl get nodes"
