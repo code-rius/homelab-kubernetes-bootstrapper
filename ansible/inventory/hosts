@@ -7,15 +7,19 @@ master:
   hosts:
     k8s-master-01:
       ansible_host: 192.168.1.201
+      pod_subnet: 10.200.0.0/24
 
 workers:
   hosts:
     k8s-worker-01:
       ansible_host: 192.168.1.202
+      pod_subnet: 10.200.1.0/24
     k8s-worker-02:
       ansible_host: 192.168.1.203
+      pod_subnet: 10.200.2.0/24
     k8s-worker-03:
       ansible_host: 192.168.1.204
+      pod_subnet: 10.200.3.0/24
 
 k8s_cluster:
   children:
@@ -23,5 +27,5 @@ k8s_cluster:
     workers:
   vars:
     # Common variables for all cluster nodes
-    kubernetes_version: "1.28"
+    kubernetes_version: "1.35"
     container_runtime: containerd

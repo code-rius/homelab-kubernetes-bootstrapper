@@ -1,0 +1,29 @@
+---
+- name: Configure /etc/hosts for cluster nodes
+  hosts: k8s_cluster
+  become: true
+  tasks:
+    - name: Disable cloud-init management of /etc/hosts
+      lineinfile:
+        path: /etc/cloud/cloud.cfg
+        regexp: '^manage_etc_hosts:'
+        line: 'manage_etc_hosts: false'
+        state: present
+      when: ansible_facts.os_family == "Debian"
+
+    - name: Create /etc/hosts file
+      copy:
+        dest: /etc/hosts
+        content: |
+          127.0.0.1 localhost
+          ::1 localhost ip6-localhost ip6-loopback
+          ff02::1 ip6-allnodes
+          ff02::2 ip6-allrouters
+          
+          # Kubernetes cluster nodes
+          {% for host in groups['k8s_cluster'] %}
+          {{ hostvars[host].ansible_host }} {{ host }}
+          {% endfor %}
+        owner: root
+        group: root
+        mode: '0644'
