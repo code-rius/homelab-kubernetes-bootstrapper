@@ -30,6 +30,29 @@ clean:
 	cd ansible && ansible all -b -m file -a "path=/root/.kube state=absent"
 	rm -f ansible/.kubeadm-join-command
 
+# Application deployments
+deploy-firefly:
+	@cd apps/firefly-iii && \
+	if [ ! -f secrets.env ] || [ ! -f postgres-secrets.env ]; then \
+		echo "❌ Error: secrets.env or postgres-secrets.env not found!"; \
+		echo "Copy the .example files and fill in your values:"; \
+		echo "  cp secrets.env.example secrets.env"; \
+		echo "  cp postgres-secrets.env.example postgres-secrets.env"; \
+		exit 1; \
+	fi
+	kubectl apply -f apps/firefly-iii/namespace.yml
+	kubectl create secret generic postgres-secret --from-env-file=apps/firefly-iii/postgres-secrets.env -n firefly-iii --dry-run=client -o yaml | kubectl apply -f -
+	kubectl create secret generic firefly-secret --from-env-file=apps/firefly-iii/secrets.env -n firefly-iii --dry-run=client -o yaml | kubectl apply -f -
+	kubectl apply -f apps/firefly-iii/postgres.yml
+	kubectl apply -f apps/firefly-iii/firefly.yml
+	@echo ""
+	@echo "Waiting for Firefly III to be ready..."
+	@kubectl wait --for=condition=ready pod -l app=postgres -n firefly-iii --timeout=300s
+	@kubectl wait --for=condition=ready pod -l app=firefly-iii -n firefly-iii --timeout=300s
+	@echo ""
+	@echo "✅ Firefly III is ready!"
+	@echo "Access at: http://192.168.1.201:30080"
+
 # The hard way (manual setup)
 certificates:
 	cd ansible && ansible-playbook playbooks/manual-setup/2-ssl-authority.yml

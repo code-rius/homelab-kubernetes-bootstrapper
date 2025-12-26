@@ -7,3 +7,5 @@ ansible/certs/
 
 # Kubeadm join command
 ansible/.kubeadm-join-command
+*.env
+!*.env.example
