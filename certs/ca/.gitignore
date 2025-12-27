@@ -1,0 +1,2 @@
+# Keep CA files but don't commit private key to git
+ca.key

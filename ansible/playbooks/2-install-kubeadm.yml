@@ -122,15 +122,16 @@
   hosts: master
   become: true
   tasks:
-    - name: Install kubelet, kubeadm, and kubectl
+    - name: Install kubelet, kubeadm, kubectl, and Helm prerequisites
       apt:
         name:
           - kubelet
           - kubeadm
           - kubectl
+          - apt-transport-https
         state: present
 
-    - name: Hold packages at current version
+    - name: Hold Kubernetes packages at current version
       dpkg_selections:
         name: "{{ item }}"
         selection: hold
@@ -138,6 +139,25 @@
         - kubelet
         - kubeadm
         - kubectl
+
+    - name: Download and add Helm GPG key
+      shell: |
+        curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | tee /usr/share/keyrings/helm.gpg > /dev/null
+      args:
+        creates: /usr/share/keyrings/helm.gpg
+
+    - name: Add Helm repository
+      lineinfile:
+        path: /etc/apt/sources.list.d/helm-stable-debian.list
+        line: "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main"
+        create: yes
+        mode: '0644'
+
+    - name: Install Helm
+      apt:
+        name: helm
+        state: present
+        update_cache: yes
 
     - name: Enable kubelet service
       systemd:

@@ -68,12 +68,9 @@ for device in data.get('devices', []):
 # Clean up operator device (usually named "tailscale-operator")
 delete_device "tailscale-operator"
 
-# Clean up app devices (firefly, or any passed as argument)
-if [ -n "$1" ]; then
-    delete_device "$1"
-else
-    delete_device "firefly"
-fi
+# Clean up app devices
+delete_device "firefly"
+delete_device "radicale"
 
 echo ""
 echo "🎉 Cleanup complete!"

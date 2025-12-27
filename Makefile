@@ -16,6 +16,8 @@ setup:
 	@echo ""
 	@$(MAKE) tailscale
 	@echo ""
+	@$(MAKE) certmanager
+	@echo ""
 	@echo "✅ Cluster setup complete!"
 	@echo "Run 'make deploy-firefly-tailscale' to deploy Firefly III"
 
@@ -40,6 +42,13 @@ storage:
 
 tailscale:
 	cd ansible && ansible-playbook playbooks/5-setup-tailscale.yml
+
+certmanager:
+	@if [ ! -f certs/ca/ca.crt ] || [ ! -f certs/ca/ca.key ]; then \
+		echo "🔐 Generating Root CA..."; \
+		chmod +x scripts/generate-ca.sh && ./scripts/generate-ca.sh; \
+	fi
+	cd ansible && ansible-playbook playbooks/6-setup-cert-manager.yml
 
 status:
 	@echo "Checking cluster status..."
@@ -109,16 +118,14 @@ deploy-firefly:
 	@echo "Access at: http://192.168.1.201:30080"
 
 deploy-radicale:
-	@if [ ! -f apps/radicale/certs/tls.crt ] || [ ! -f apps/radicale/certs/tls.key ]; then \
-		echo "⚠️  SSL certificates not found. Generating new ones..."; \
-		./apps/radicale/generate-cert.sh; \
-	fi
 	kubectl apply -f apps/radicale/namespace.yml
 	@echo "Recreating PV to ensure clean binding..."
 	@kubectl delete pv radicale-data-pv --ignore-not-found=true
 	kubectl apply -f apps/radicale/radicale-pv.yml
-	kubectl create secret tls radicale-tls --cert=apps/radicale/certs/tls.crt --key=apps/radicale/certs/tls.key -n radicale --dry-run=client -o yaml | kubectl apply -f -
 	kubectl apply -f apps/radicale/radicale.yml
+	@echo ""
+	@echo "Waiting for certificate to be issued..."
+	@kubectl wait --for=condition=ready certificate/radicale-tls -n radicale --timeout=120s || true
 	@echo ""
 	@echo "Waiting for Radicale to be ready..."
 	@kubectl wait --for=condition=ready pod -l app=radicale -n radicale --timeout=300s || true
@@ -126,9 +133,9 @@ deploy-radicale:
 	@echo "✅ Radicale deployed!"
 	@echo "Access at: https://radicale.tail060ef.ts.net"
 	@echo ""
-	@echo "📱 To add to iOS:"
-	@echo "1. Copy apps/radicale/certs/tls.crt to your device"
-	@echo "2. Open and install the certificate"
+	@echo "📱 To add to iOS (first time only):"
+	@echo "1. Copy certs/ca/ca.crt to your device"
+	@echo "2. Open and install 'Homelab Root CA'"
 	@echo "3. Settings → General → About → Certificate Trust Settings"
 	@echo "4. Enable full trust, then add CalDAV account"
 

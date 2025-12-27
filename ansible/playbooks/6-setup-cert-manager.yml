@@ -1,0 +1,114 @@
+---
+- name: Install cert-manager
+  hosts: master
+  become: false
+  tasks:
+    - name: Add cert-manager Helm repository
+      command: helm repo add jetstack https://charts.jetstack.io
+      register: helm_repo_result
+      failed_when: false
+      changed_when: "'has been added' in helm_repo_result.stdout"
+
+    - name: Update Helm repositories
+      command: helm repo update
+
+    - name: Create cert-manager namespace
+      command: kubectl create namespace cert-manager
+      register: namespace_result
+      failed_when: false
+      changed_when: namespace_result.rc == 0
+
+    - name: Check if cert-manager is already installed
+      command: helm list -n cert-manager -o json
+      register: helm_list
+      changed_when: false
+
+    - name: Install cert-manager with CRDs
+      command: >
+        helm install cert-manager jetstack/cert-manager
+        --namespace cert-manager
+        --set crds.enabled=true
+        --set crds.keep=true
+      register: helm_install_result
+      when: "'cert-manager' not in helm_list.stdout"
+      changed_when: true
+
+    - name: Upgrade cert-manager if already installed
+      command: >
+        helm upgrade cert-manager jetstack/cert-manager
+        --namespace cert-manager
+        --set crds.enabled=true
+        --set crds.keep=true
+      register: helm_upgrade_result
+      when: "'cert-manager' in helm_list.stdout"
+      changed_when: true
+
+    - name: Wait for cert-manager to be ready
+      command: kubectl wait --for=condition=available --timeout=120s deployment --all -n cert-manager
+      register: wait_result
+      retries: 3
+      delay: 10
+      until: wait_result.rc == 0
+
+    - name: Check if CA secret exists
+      command: kubectl get secret homelab-ca-key-pair -n cert-manager
+      register: ca_secret_check
+      failed_when: false
+      changed_when: false
+
+    - name: Copy CA files to master if secret doesn't exist
+      copy:
+        src: "{{ playbook_dir }}/../../certs/ca/{{ item }}"
+        dest: "/tmp/{{ item }}"
+        mode: '0644'
+      loop:
+        - ca.crt
+        - ca.key
+      when: ca_secret_check.rc != 0
+
+    - name: Create CA secret in cert-manager namespace
+      command: >
+        kubectl create secret tls homelab-ca-key-pair
+        --cert=/tmp/ca.crt
+        --key=/tmp/ca.key
+        -n cert-manager
+      when: ca_secret_check.rc != 0
+
+    - name: Remove temporary CA files from master
+      file:
+        path: "/tmp/{{ item }}"
+        state: absent
+      loop:
+        - ca.crt
+        - ca.key
+      when: ca_secret_check.rc != 0
+
+    - name: Create CA ClusterIssuer
+      command: kubectl apply -f -
+      args:
+        stdin: |
+          apiVersion: cert-manager.io/v1
+          kind: ClusterIssuer
+          metadata:
+            name: homelab-ca-issuer
+          spec:
+            ca:
+              secretName: homelab-ca-key-pair
+      register: issuer_result
+      changed_when: "'created' in issuer_result.stdout or 'configured' in issuer_result.stdout"
+
+    - name: Verify ClusterIssuer is ready
+      command: kubectl get clusterissuer homelab-ca-issuer -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: issuer_status
+      retries: 5
+      delay: 5
+      until: issuer_status.stdout == "True"
+
+    - name: Display cert-manager status
+      command: kubectl get pods -n cert-manager
+      register: certmanager_pods
+      changed_when: false
+
+    - name: Show cert-manager pods
+      debug:
+        msg: "{{ certmanager_pods.stdout_lines }}"

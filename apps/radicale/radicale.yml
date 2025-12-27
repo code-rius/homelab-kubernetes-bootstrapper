@@ -1,4 +1,19 @@
 ---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: radicale-tls
+  namespace: radicale
+spec:
+  secretName: radicale-tls
+  issuerRef:
+    name: homelab-ca-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - radicale.tail060ef.ts.net
+  duration: 8760h  # 1 year
+  renewBefore: 720h  # 30 days
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
