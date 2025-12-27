@@ -22,7 +22,7 @@ setup:
 	@echo "Run 'make deploy-firefly-tailscale' to deploy Firefly III"
 
 # Deploy all applications
-deploy-all: deploy-firefly-tailscale deploy-radicale
+deploy-all: deploy-firefly-tailscale deploy-radicale deploy-minidlna
 
 # Quick setup commands
 ping:
@@ -138,6 +138,24 @@ deploy-radicale:
 	@echo "2. Open and install 'Homelab Root CA'"
 	@echo "3. Settings → General → About → Certificate Trust Settings"
 	@echo "4. Enable full trust, then add CalDAV account"
+
+deploy-minidlna:
+	kubectl apply -f apps/minidlna/namespace.yml
+	@echo "Recreating PV to ensure clean binding..."
+	@kubectl delete pv minidlna-media-pv --ignore-not-found=true
+	kubectl apply -f apps/minidlna/minidlna-pv.yml
+	kubectl apply -f apps/minidlna/minidlna.yml
+	@echo ""
+	@echo "Waiting for MiniDLNA to be ready..."
+	@kubectl wait --for=condition=ready pod -l app=minidlna -n minidlna --timeout=300s || true
+	@echo ""
+	@echo "✅ MiniDLNA deployed!"
+	@echo "Web interface: http://192.168.1.201:30200"
+	@echo "DLNA: Auto-discovered by TVs on your network as 'Homelab Media Server'"
+	@echo ""
+	@echo "📁 Add media to NFS:"
+	@echo "ssh coderius@192.168.1.150"
+	@echo "sudo cp /path/to/media /ZFS01/nfs-storage/media/"
 
 # The hard way (manual setup)
 certificates:
