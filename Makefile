@@ -12,6 +12,8 @@ setup:
 	@echo ""
 	@$(MAKE) storage
 	@echo ""
+	@$(MAKE) cleanup-tailscale-device
+	@echo ""
 	@$(MAKE) tailscale
 	@echo ""
 	@echo "✅ Cluster setup complete!"
@@ -68,6 +70,10 @@ deploy-firefly-tailscale:
 		exit 1; \
 	fi
 	kubectl apply -f apps/firefly-iii/namespace.yml
+	@echo "Recreating PVs to ensure clean binding..."
+	@kubectl delete pv firefly-postgres-pv firefly-upload-pv --ignore-not-found=true
+	kubectl apply -f apps/firefly-iii/postgres-pv.yml
+	kubectl apply -f apps/firefly-iii/firefly-upload-pv.yml
 	kubectl create secret generic postgres-secret --from-env-file=apps/firefly-iii/postgres-secrets.env -n firefly-iii --dry-run=client -o yaml | kubectl apply -f -
 	kubectl create secret generic firefly-secret --from-env-file=apps/firefly-iii/secrets.env -n firefly-iii --dry-run=client -o yaml | kubectl apply -f -
 	kubectl apply -f apps/firefly-iii/postgres.yml

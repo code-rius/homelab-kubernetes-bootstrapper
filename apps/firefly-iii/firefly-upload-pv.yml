@@ -1,0 +1,33 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: firefly-upload-pv
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain  # Keep data even if PVC is deleted
+  storageClassName: ""  # Empty to prevent dynamic provisioning
+  nfs:
+    server: 192.168.1.150
+    path: /ZFS01/nfs-storage/firefly-uploads
+  mountOptions:
+    - hard
+    - nfsvers=4.1
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: firefly-upload
+  namespace: firefly-iii
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ""  # Must match PV
+  volumeName: firefly-upload-pv  # Bind to specific PV
