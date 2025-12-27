@@ -3,6 +3,18 @@
   hosts: master
   become: false
   tasks:
+    - name: Clean up old Tailscale devices via API
+      shell: "{{ playbook_dir }}/../../scripts/cleanup-tailscale-device.sh"
+      delegate_to: localhost
+      become: false
+      ignore_errors: yes
+      register: cleanup_result
+
+    - name: Display cleanup results
+      debug:
+        msg: "{{ cleanup_result.stdout_lines }}"
+      when: cleanup_result.stdout_lines is defined
+
     - name: Check if Tailscale OAuth credentials exist locally
       stat:
         path: "{{ playbook_dir }}/../resources/tailscale-oauth.env"

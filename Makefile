@@ -1,4 +1,24 @@
-.PHONY: ping hostnames install init status clean
+.PHONY: ping hostnames install init status clean setup deploy-all deploy-firefly-tailscale
+
+# Full automated setup - run everything in sequence
+setup:
+	@echo "🚀 Starting full cluster setup..."
+	@echo ""
+	@$(MAKE) hostnames
+	@echo ""
+	@$(MAKE) install
+	@echo ""
+	@$(MAKE) init
+	@echo ""
+	@$(MAKE) storage
+	@echo ""
+	@$(MAKE) tailscale
+	@echo ""
+	@echo "✅ Cluster setup complete!"
+	@echo "Run 'make deploy-firefly-tailscale' to deploy Firefly III"
+
+# Deploy all applications
+deploy-all: deploy-firefly-tailscale
 
 # Quick setup commands
 ping:
@@ -34,6 +54,32 @@ clean:
 	rm -f ansible/.kubeadm-join-command
 
 # Application deployments
+cleanup-tailscale-device:
+	@echo "🧹 Cleaning up old Tailscale devices..."
+	@./scripts/cleanup-tailscale-device.sh
+
+deploy-firefly-tailscale:
+	@cd apps/firefly-iii && \
+	if [ ! -f secrets.env ] || [ ! -f postgres-secrets.env ]; then \
+		echo "❌ Error: secrets.env or postgres-secrets.env not found!"; \
+		echo "Copy the .example files and fill in your values:"; \
+		echo "  cp secrets.env.example secrets.env"; \
+		echo "  cp postgres-secrets.env.example postgres-secrets.env"; \
+		exit 1; \
+	fi
+	kubectl apply -f apps/firefly-iii/namespace.yml
+	kubectl create secret generic postgres-secret --from-env-file=apps/firefly-iii/postgres-secrets.env -n firefly-iii --dry-run=client -o yaml | kubectl apply -f -
+	kubectl create secret generic firefly-secret --from-env-file=apps/firefly-iii/secrets.env -n firefly-iii --dry-run=client -o yaml | kubectl apply -f -
+	kubectl apply -f apps/firefly-iii/postgres.yml
+	kubectl apply -f apps/firefly-iii/firefly-tailscale.yml
+	@echo ""
+	@echo "Waiting for Firefly III to be ready..."
+	@kubectl wait --for=condition=ready pod -l app=postgres -n firefly-iii --timeout=300s || true
+	@kubectl wait --for=condition=ready pod -l app=firefly-iii -n firefly-iii --timeout=300s || true
+	@echo ""
+	@echo "✅ Firefly III deployed!"
+	@echo "Access at: http://firefly.tail060ef.ts.net"
+
 deploy-firefly:
 	@cd apps/firefly-iii && \
 	if [ ! -f secrets.env ] || [ ! -f postgres-secrets.env ]; then \

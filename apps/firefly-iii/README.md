@@ -1,90 +1,103 @@
 # Firefly III Deployment
 
-Personal finance manager deployed on Kubernetes with PostgreSQL.
-
-## Prerequisites
-
-- NFS storage class configured
-- Kubernetes cluster running
+Personal finance manager with PostgreSQL, NFS storage, and Tailscale access.
 
 ## Quick Deploy
 
-**First time setup**:
-
-1. Create secrets from environment files:
-   ```bash
-   kubectl create namespace firefly-iii
-   kubectl create secret generic postgres-secret --from-env-file=postgres-secrets.env -n firefly-iii
-   kubectl create secret generic firefly-secret --from-env-file=secrets.env -n firefly-iii
-   ```
-
-2. Deploy the application:
-   ```bash
-   kubectl apply -f namespace.yml
-   kubectl apply -f postgres.yml
-   kubectl apply -f firefly.yml
-   ```
-
-Or use the Makefile:
 ```bash
-make deploy-firefly
+cd apps/firefly-iii
+
+# 1. Configure secrets
+cp secrets.env.example secrets.env
+cp postgres-secrets.env.example postgres-secrets.env
+echo "APP_KEY=base64:$(openssl rand -base64 32)"
+echo "DB_PASSWORD=$(openssl rand -base64 24)"
+vim secrets.env postgres-secrets.env  # Add generated values
+
+# 2. Deploy
+cd ../..
+make deploy-firefly-tailscale  # Tailscale (recommended)
+# OR
+make deploy-firefly            # NodePort (home network only)
 ```
 
-**Wait for pods to be ready**:
+**Access**:
+- Tailscale: `http://firefly.tail060ef.ts.net`
+- NodePort: `http://192.168.1.201:30080`
+
+## Secrets
+
+**secrets.env**:
 ```bash
-kubectl wait --for=condition=ready pod -l app=postgres -n firefly-iii --timeout=300s
-kubectl wait --for=condition=ready pod -l app=firefly-iii -n firefly-iii --timeout=300s
+APP_KEY=base64:YOUR_KEY
+DB_PASSWORD=YOUR_PASSWORD
+DB_CONNECTION=pgsql
+DB_HOST=postgres.firefly-iii.svc.cluster.local
+DB_PORT=5432
+DB_DATABASE=firefly
+DB_USERNAME=firefly
 ```
 
-## Access
+**postgres-secrets.env**:
+```bash
+POSTGRES_USER=firefly
+POSTGRES_PASSWORD=YOUR_PASSWORD  # Must match DB_PASSWORD!
+POSTGRES_DB=firefly
+```
 
-Firefly III is exposed via NodePort on port 30080.
+## Storage (NFS)
 
-Access from your home network:
-- http://192.168.1.201:30080 (or any worker node IP)
+- **postgres-data**: 10Gi at `/var/lib/postgresql/data/pgdata`
+- **firefly-upload**: 5Gi at `/var/www/html/storage/upload`
 
-## Security Setup
-
-**Secrets are stored in `.env` files (not committed to git)**:
-
-1. Generate secure credentials:
-   ```bash
-   # Generate APP_KEY
-   echo "base64:$(openssl rand -base64 32)"
-   
-   # Generate DB password
-   openssl rand -base64 24
-   ```
-
-2. Update `secrets.env` and `postgres-secrets.env` with your values
-
-3. The secrets are created automatically when you run `make deploy-firefly`
-
-**Note**: `secrets.env` and `postgres-secrets.env` are gitignored and contain actual credentials. Example files are provided for reference.
+Data survives pod restarts, node failures, and cluster recreation!
 
 ## Management
 
 ```bash
-# Check status
-kubectl get pods -n firefly-iii
+# Status
+kubectl get all -n firefly-iii
 kubectl get pvc -n firefly-iii
 
-# View logs
+# Logs
 kubectl logs -n firefly-iii -l app=firefly-iii -f
 kubectl logs -n firefly-iii -l app=postgres -f
 
-# Delete everything
-kubectl delete namespace firefly-iii
+# Restart
+kubectl rollout restart deployment/firefly-iii -n firefly-iii
+kubectl rollout restart deployment/postgres -n firefly-iii
+
+# Update secrets
+vim secrets.env postgres-secrets.env
+kubectl create secret generic postgres-secret --from-env-file=postgres-secrets.env -n firefly-iii --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic firefly-secret --from-env-file=secrets.env -n firefly-iii --dry-run=client -o yaml | kubectl apply -f -
+kubectl rollout restart deployment/{postgres,firefly-iii} -n firefly-iii
 ```
 
-## Storage
+## Troubleshooting
 
-- PostgreSQL: 10Gi on NFS (database data)
-- Firefly: 5Gi on NFS (uploaded files, exports)
+```bash
+# Firefly not loading
+kubectl get pods -n firefly-iii
+kubectl logs -n firefly-iii -l app=firefly-iii --tail=100
 
-## Initial Setup
+# Database issues
+kubectl get pods -n firefly-iii -l app=postgres
+kubectl logs -n firefly-iii -l app=postgres --tail=50
 
-1. Visit http://192.168.1.201:30080
-2. Follow the setup wizard
-3. Create your first account
-4. Start managing your finances!
+# Tailscale issues
+kubectl get svc -n firefly-iii firefly-iii  # Check external IP
+kubectl get pods -n tailscale
+kubectl logs -n tailscale -l tailscale.com/parent-resource=firefly-iii
+
+# Storage issues
+kubectl get pvc -n firefly-iii  # Should show Bound
+```
+
+## Cleanup
+
+```bash
+kubectl delete namespace firefly-iii
+make cleanup-tailscale-device
+# NFS data persists - delete manually on Proxmox if needed
+```

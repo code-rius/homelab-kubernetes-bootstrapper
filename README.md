@@ -1,55 +1,92 @@
 # Homelab Kubernetes Bootstrapper
 
-Automated Kubernetes cluster setup on Proxmox VMs using Ansible and kubeadm.
+Automated Kubernetes cluster setup on Proxmox VMs with NFS storage, Tailscale networking, and application deployments.
 
 ## Prerequisites
-- Hardware with Proxmox installed
-- SSH access to Proxmox
-- 4 Ubuntu VMs provisioned (1 master, 3 workers)
 
-## Quick Setup
+- **Proxmox** with 4 Ubuntu VMs (1 master + 3 workers)
+- **NFS share** at `pve:/ZFS01/nfs-storage`
+- **Ansible** on your local machine
+- **[Tailscale account](https://tailscale.com/)** with [OAuth credentials](https://login.tailscale.com/admin/settings/oauth)
+
+## Quick Start
 
 ```bash
-# 1. Test connectivity
-make ping
+# 1. Configure Ansible inventory
+vim ansible/inventory/hosts
 
-# 2. Configure hostnames
-make hostnames
+# 2. Configure Tailscale OAuth
+cp ansible/resources/tailscale-oauth.env.example ansible/resources/tailscale-oauth.env
+vim ansible/resources/tailscale-oauth.env
 
-# 3. Install Kubernetes components
-make install
+# 3. Setup entire cluster (10-15 min)
+make setup
 
-# 4. Initialize cluster
-make init
-
-# 5. Check cluster status
-make status
+# 4. Deploy Firefly III
+cd apps/firefly-iii
+cp secrets.env.example secrets.env
+cp postgres-secrets.env.example postgres-secrets.env
+# Generate: openssl rand -base64 32 / openssl rand -base64 24
+vim secrets.env postgres-secrets.env
+cd ../..
+make deploy-firefly-tailscale
 ```
 
-That's it! Your cluster should be ready in ~10 minutes.
+Access at: `http://firefly.tail060ef.ts.net`
 
 ## Commands
 
-- `make ping` - Test Ansible connectivity
-- `make hostnames` - Configure /etc/hosts on all nodes
-- `make install` - Install kubeadm, kubelet, kubectl
-- `make init` - Initialize cluster and join workers
-- `make status` - Check cluster status
-- `make clean` - Reset cluster (destructive!)
+### Cluster
+```bash
+make setup              # Full automated setup
+make status             # Check cluster health
+make clean              # Reset cluster
+```
 
-## Manual Setup (The Hard Way)
+### Apps
+```bash
+make deploy-firefly-tailscale  # Deploy with Tailscale
+make deploy-firefly            # Deploy with NodePort
+make cleanup-tailscale-device  # Remove old devices
+```
 
-For learning purposes, manual setup playbooks are in `ansible/playbooks/manual-setup/`:
-- `make certificates` - Generate TLS certificates manually
-- `make kubeconfigs` - Create kubeconfig files manually
+### Individual Steps
+```bash
+make ping               # Test connectivity
+make hostnames          # Configure /etc/hosts
+make install            # Install Kubernetes
+make init               # Initialize cluster
+make storage            # Deploy NFS provisioner
+make tailscale          # Install Tailscale operator
+```
 
-These help understand Kubernetes internals but aren't needed for a working cluster.
+## Architecture
 
-## Cluster Details
+- **Kubernetes**: 1.35 with kubeadm
+- **CNI**: Flannel (10.244.0.0/16)
+- **Runtime**: containerd
+- **Storage**: NFS client provisioner
+- **Network**: Tailscale LoadBalancer
 
-- **Master**: k8s-master (192.168.1.201)
-- **Workers**: k8s-worker-01/02/03 (192.168.1.202-204)
-- **Pod Network**: 10.200.0.0/16 (Calico CNI)
-- **Service Network**: 10.32.0.0/24
-- **Kubernetes Version**: 1.35
+### Data Persistence
+
+All data on NFS survives VM recreation:
+- PostgreSQL: `/firefly-iii-postgres-data-xxx/`
+- Uploads: `/firefly-iii-firefly-upload-xxx/`
+
+Rebuild workflow:
+```bash
+make setup && make deploy-firefly-tailscale  # ~15 min, data persists!
+```
+
+## Documentation
+
+- [apps/firefly-iii/README.md](apps/firefly-iii/README.md) - Firefly III deployment guide
+- [docs/TAILSCALE-GUIDE.md](docs/TAILSCALE-GUIDE.md) - Tailscale setup and troubleshooting
+
+## Network Configuration
+
+- Master: k8s-master-1 (192.168.1.201)
+- Workers: k8s-worker-1/2/3 (192.168.1.202-204)
+- NFS: pve (192.168.1.150)
 

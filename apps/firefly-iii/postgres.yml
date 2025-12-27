@@ -31,23 +31,18 @@ spec:
     spec:
       containers:
       - name: postgres
-        image: postgres:16-alpine
-        ports:
-        - containerPort: 5432
+        image: postgres:15
+        env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
         envFrom:
         - secretRef:
             name: postgres-secret
+        ports:
+        - containerPort: 5432
         volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
-          subPath: postgres
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
       volumes:
       - name: postgres-data
         persistentVolumeClaim:
@@ -63,5 +58,4 @@ spec:
     app: postgres
   ports:
   - port: 5432
-    targetPort: 5432
   clusterIP: None
