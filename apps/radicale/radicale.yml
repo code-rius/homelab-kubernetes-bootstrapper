@@ -1,0 +1,69 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radicale
+  namespace: radicale
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: radicale
+  template:
+    metadata:
+      labels:
+        app: radicale
+    spec:
+      containers:
+      - name: radicale
+        image: tomsquest/docker-radicale:latest
+        ports:
+        - containerPort: 5232
+        env:
+        - name: TAKE_FILE_OWNERSHIP
+          value: "false"
+        volumeMounts:
+        - name: radicale-data
+          mountPath: /data
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5232
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5232
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      volumes:
+      - name: radicale-data
+        persistentVolumeClaim:
+          claimName: radicale-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: radicale
+  namespace: radicale
+  annotations:
+    tailscale.com/hostname: "radicale"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: tailscale
+  selector:
+    app: radicale
+  ports:
+  - port: 80
+    targetPort: 5232
+    name: http

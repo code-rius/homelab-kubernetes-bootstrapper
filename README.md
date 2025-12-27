@@ -45,8 +45,9 @@ make clean              # Reset cluster
 
 ### Apps
 ```bash
-make deploy-firefly-tailscale  # Deploy with Tailscale
-make deploy-firefly            # Deploy with NodePort
+make deploy-all                # Deploy all apps
+make deploy-firefly-tailscale  # Deploy Firefly III
+make deploy-radicale           # Deploy Radicale CalDAV
 make cleanup-tailscale-device  # Remove old devices
 ```
 
