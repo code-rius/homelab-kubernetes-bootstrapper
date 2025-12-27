@@ -1,6 +1,6 @@
 # Radicale CalDAV/CardDAV Server
 
-Simple CalDAV and CardDAV server for calendars and contacts.
+Simple CalDAV and CardDAV server for calendars and contacts with HTTPS.
 
 ## Quick Deploy
 
@@ -8,14 +8,30 @@ Simple CalDAV and CardDAV server for calendars and contacts.
 # 1. Create NFS directory on Proxmox
 ssh coderius@192.168.1.150 "sudo mkdir -p /ZFS01/nfs-storage/radicale-data && sudo chmod 777 /ZFS01/nfs-storage/radicale-data"
 
-# 2. Deploy
+# 2. Deploy (auto-generates SSL cert if needed)
 make deploy-radicale
 
-# 3. Create user
-kubectl exec -n radicale -it deployment/radicale -- htpasswd -B -c /data/users myusername
+# 3. Install certificate on iOS/macOS
+# AirDrop apps/radicale/certs/tls.crt to your device
+# Open → Install → Settings → General → About → Certificate Trust Settings → Enable
+
+# 4. Create user
+kubectl exec -n radicale deployment/radicale -- sh -c 'echo "username:password" > /data/users'
 ```
 
-**Access**: `http://radicale.tail060ef.ts.net`
+**Access**: `https://radicale.tail060ef.ts.net`
+
+## SSL Certificate Persistence
+
+The certificate is stored in `apps/radicale/certs/`:
+- `tls.crt` - Certificate (expires in 10 years)
+- `tls.key` - Private key
+
+**Important**: Back these up! If you keep the same files:
+- No need to reinstall on devices after cluster recreation
+- Certificate remains trusted
+
+To regenerate: `./apps/radicale/generate-cert.sh`
 
 ## Storage (NFS)
 

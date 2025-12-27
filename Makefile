@@ -109,20 +109,28 @@ deploy-firefly:
 	@echo "Access at: http://192.168.1.201:30080"
 
 deploy-radicale:
+	@if [ ! -f apps/radicale/certs/tls.crt ] || [ ! -f apps/radicale/certs/tls.key ]; then \
+		echo "⚠️  SSL certificates not found. Generating new ones..."; \
+		./apps/radicale/generate-cert.sh; \
+	fi
 	kubectl apply -f apps/radicale/namespace.yml
 	@echo "Recreating PV to ensure clean binding..."
 	@kubectl delete pv radicale-data-pv --ignore-not-found=true
 	kubectl apply -f apps/radicale/radicale-pv.yml
+	kubectl create secret tls radicale-tls --cert=apps/radicale/certs/tls.crt --key=apps/radicale/certs/tls.key -n radicale --dry-run=client -o yaml | kubectl apply -f -
 	kubectl apply -f apps/radicale/radicale.yml
 	@echo ""
 	@echo "Waiting for Radicale to be ready..."
 	@kubectl wait --for=condition=ready pod -l app=radicale -n radicale --timeout=300s || true
 	@echo ""
 	@echo "✅ Radicale deployed!"
-	@echo "Access at: http://radicale.tail060ef.ts.net"
+	@echo "Access at: https://radicale.tail060ef.ts.net"
 	@echo ""
-	@echo "Create a user with:"
-	@echo "  kubectl exec -n radicale -it deployment/radicale -- htpasswd -B -c /data/users myusername"
+	@echo "📱 To add to iOS:"
+	@echo "1. Copy apps/radicale/certs/tls.crt to your device"
+	@echo "2. Open and install the certificate"
+	@echo "3. Settings → General → About → Certificate Trust Settings"
+	@echo "4. Enable full trust, then add CalDAV account"
 
 # The hard way (manual setup)
 certificates:

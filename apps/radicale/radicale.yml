@@ -1,4 +1,29 @@
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: radicale
+data:
+  default.conf: |
+    server {
+        listen 443 ssl;
+        server_name radicale.tail060ef.ts.net;
+
+        ssl_certificate /etc/nginx/ssl/tls.crt;
+        ssl_certificate_key /etc/nginx/ssl/tls.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        location / {
+            proxy_pass http://localhost:5232;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,22 +59,33 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 5232
-          initialDelaySeconds: 30
-          periodSeconds: 30
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 5232
-          initialDelaySeconds: 10
-          periodSeconds: 10
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 443
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+        - name: tls-cert
+          mountPath: /etc/nginx/ssl
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
       volumes:
       - name: radicale-data
         persistentVolumeClaim:
           claimName: radicale-data
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+      - name: tls-cert
+        secret:
+          secretName: radicale-tls
 ---
 apiVersion: v1
 kind: Service
@@ -64,6 +100,6 @@ spec:
   selector:
     app: radicale
   ports:
-  - port: 80
-    targetPort: 5232
-    name: http
+  - port: 443
+    targetPort: 443
+    name: https
