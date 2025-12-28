@@ -71,6 +71,7 @@ delete_device "tailscale-operator"
 # Clean up app devices
 delete_device "firefly"
 delete_device "radicale"
+delete_device "qbittorrent"
 
 echo ""
 echo "🎉 Cleanup complete!"

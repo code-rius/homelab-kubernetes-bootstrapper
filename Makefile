@@ -22,7 +22,7 @@ setup:
 	@echo "Run 'make deploy-firefly-tailscale' to deploy Firefly III"
 
 # Deploy all applications
-deploy-all: deploy-firefly-tailscale deploy-radicale deploy-minidlna
+deploy-all: deploy-firefly-tailscale deploy-radicale deploy-minidlna deploy-qbittorrent
 
 # Quick setup commands
 ping:
@@ -156,6 +156,26 @@ deploy-minidlna:
 	@echo "📁 Add media to NFS:"
 	@echo "ssh coderius@192.168.1.150"
 	@echo "sudo cp /path/to/media /ZFS01/nfs-storage/media/"
+
+deploy-qbittorrent:
+	kubectl apply -f apps/qbittorrent/namespace.yml
+	@echo "Recreating PVs to ensure clean binding..."
+	@kubectl delete pv qbittorrent-downloads-pv qbittorrent-config-pv --ignore-not-found=true
+	kubectl apply -f apps/qbittorrent/qbittorrent-pv.yml
+	kubectl apply -f apps/qbittorrent/qbittorrent.yml
+	@echo ""
+	@echo "Waiting for qBittorrent to be ready..."
+	@kubectl wait --for=condition=ready pod -l app=qbittorrent -n qbittorrent --timeout=300s || true
+	@echo ""
+	@echo "✅ qBittorrent deployed!"
+	@echo "Web UI: http://qbittorrent.tail060ef.ts.net"
+	@echo "Torrent port: 6881 (TCP/UDP) on all nodes"
+	@echo ""
+	@echo "� Create directories:"
+	@echo "ssh coderius@192.168.1.150 \"sudo mkdir -p /ZFS01/nfs-storage/{media/downloads,qbittorrent/config} && sudo chmod -R 777 /ZFS01/nfs-storage/media /ZFS01/nfs-storage/qbittorrent\""
+	@echo ""
+	@echo "�🔑 Get temporary password:"
+	@echo "kubectl logs -n qbittorrent -l app=qbittorrent | grep password"
 
 # The hard way (manual setup)
 certificates:
