@@ -11,6 +11,24 @@
         state: present
       when: ansible_facts.os_family == "Debian"
 
+    - name: Configure static DNS servers via netplan
+      copy:
+        dest: /etc/netplan/99-custom-dns.yaml
+        content: |
+          network:
+            version: 2
+            ethernets:
+              eth0:
+                dhcp4: yes
+                nameservers:
+                  addresses: [8.8.8.8, 8.8.4.4, 1.1.1.1]
+                dhcp4-overrides:
+                  use-dns: false
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Apply netplan
+
     - name: Create /etc/hosts file
       copy:
         dest: /etc/hosts
@@ -30,3 +48,7 @@
         owner: root
         group: root
         mode: '0644'
+
+  handlers:
+    - name: Apply netplan
+      command: netplan apply
